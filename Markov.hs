@@ -19,14 +19,12 @@ import qualified Data.Text.IO as TIO
 import qualified Data.Map as Map
 
 -- | Newtype for a Map with a more useful Monoid
-newtype SMap a b = SMap { runSMap :: Map.Map a b } deriving Show
+newtype SMap a b = SMap (Map.Map a b) deriving Show
 
+-- TODO this should only require Semigroup b
 instance (Ord a, Monoid b) => Monoid (SMap a b) where
   mempty = SMap Map.empty
-  mappend (SMap m) = SMap . Map.unionWith mappend m . runSMap
-
-singleton :: a -> b -> SMap a b
-singleton a b = SMap $ Map.singleton a b
+  mappend (SMap m1) (SMap m2) = SMap $ Map.unionWith mappend m1 m2
 
 type Word = Text
 
@@ -51,20 +49,18 @@ seqs3 ws = zip3 ws ws1 ws2
 type Store = SMap (Word, Word) (Set Word)
 
 store :: [(Word, Word, Word)] -> Store
-store = foldMap toMap
-  where toMap (w1, w2, w3) = singleton (w1, w2) $ Set.singleton w3
+store = foldMap $ \(w1, w2, w3) ->
+  SMap $ Map.singleton (w1, w2) (Set.singleton w3)
 
 genSentence :: (RandomGen g) => Store -> State g [Word]
 genSentence st = do
   (w1, w2) <- firstWords st
   ws <- genSentence' [w2, w1]
   return $ reverse ws  
-    where
-      genSentence' ws @ (w2:w1:_)
-        | isSentenceEnd w2 = return ws
-        | otherwise = do
-                      w3 <- nextWord st (w1, w2)
-                      genSentence' (w3:ws)
+    where genSentence' ws @ (w2:w1:_)
+            | isSentenceEnd w2 = return ws
+            | otherwise = do w3 <- nextWord st (w1, w2)
+                             genSentence' (w3:ws)
 
 firstWords :: (RandomGen g) => Store -> State g (Word, Word)
 firstWords (SMap st) = randElem candidates
@@ -87,6 +83,7 @@ main :: IO ()
 main = do
   files <- getArgs
   contents <- TIO.readFile `traverse` files
-  let stored = store . seqs3 . parse $ T.concat contents
   gen <- getStdGen
-  TIO.putStrLn . T.concat . intersperse " " $ evalState (genSentence stored) gen
+  let stored = store . seqs3 . parse $ T.concat contents
+  let sentence = evalState (genSentence stored) gen
+  TIO.putStrLn . T.concat . intersperse " " $ sentence
