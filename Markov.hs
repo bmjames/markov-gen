@@ -1,19 +1,19 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, Rank2Types #-}
 
 module Markov where
 
-import Control.Monad.State
-import Data.Char          (isUpper)
-import Data.Functor       ((<$>))
-import Data.Monoid
-import Data.Foldable      (foldMap)
-import Data.Traversable   (traverse)
-import Data.List          (intersperse)
-import Data.Set           (Set)
-import qualified Data.Set as Set
-import System.Environment (getArgs)
-import Data.Text          (Text)
+import Control.Monad.State (State, state, evalState)
+import Data.Char           (isUpper)
+import Data.Functor        ((<$>))
+import Data.Monoid         (Monoid(..))
+import Data.Foldable       (foldMap)
+import Data.Traversable    (traverse)
+import Data.List           (intersperse)
+import Data.Set            (Set)
+import System.Environment  (getArgs)
+import Data.Text           (Text)
 import System.Random
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.Map as Map
@@ -21,7 +21,7 @@ import qualified Data.Map as Map
 -- | Newtype for a Map with a more useful Monoid
 newtype SMap a b = SMap (Map.Map a b) deriving Show
 
--- TODO this should only require Semigroup b
+-- TODO this should only require Semigroup, not Monoid, for b
 instance (Ord a, Monoid b) => Monoid (SMap a b) where
   mempty = SMap Map.empty
   mappend (SMap m1) (SMap m2) = SMap $ Map.unionWith mappend m1 m2
@@ -41,8 +41,8 @@ isSentenceEnd w = case T.last w of
 parse :: Text -> [Word]
 parse = T.words
 
-seqs3 :: [Word] -> [(Word, Word, Word)]
-seqs3 ws = zip3 ws ws1 ws2
+sliding3 :: [Word] -> [(Word, Word, Word)]
+sliding3 ws = zip3 ws ws1 ws2
   where ws1 = drop 1 ws
         ws2 = drop 1 ws1
 
@@ -52,7 +52,9 @@ store :: [(Word, Word, Word)] -> Store
 store = foldMap $ \(w1, w2, w3) ->
   SMap $ Map.singleton (w1, w2) (Set.singleton w3)
 
-genSentence :: (RandomGen g) => Store -> State g [Word]
+type RNG a = (RandomGen g) => State g a
+
+genSentence :: Store -> RNG [Word]
 genSentence st = do
   (w1, w2) <- firstWords st
   ws <- genSentence' [w2, w1]
@@ -62,28 +64,25 @@ genSentence st = do
             | otherwise = do w3 <- nextWord st (w1, w2)
                              genSentence' (w3:ws)
 
-firstWords :: (RandomGen g) => Store -> State g (Word, Word)
+firstWords :: Store -> RNG (Word, Word)
 firstWords (SMap st) = randElem candidates
   where candidates = filter (isSentenceStart . fst) (Map.keys st)
 
-nextWord :: (RandomGen g) => Store -> (Word, Word) -> State g Word
+nextWord :: Store -> (Word, Word) -> RNG Word
 nextWord (SMap st) k = randElem $ Set.elems candidates
   where candidates = st Map.! k
 
-nextInt :: (RandomGen g) => Int -> State g Int
-nextInt max = do gen <- get
-                 let (i, gen') = next gen
-                 put gen'
-                 return $ i `mod` max
+nextInt :: Int -> RNG Int
+nextInt max = (`mod` max) <$> state next
 
-randElem :: (RandomGen g) => [a] -> State g a
+randElem :: [a] -> RNG a
 randElem xs = (xs !!) <$> nextInt (length xs)
 
 main :: IO ()
 main = do
   files <- getArgs
-  contents <- TIO.readFile `traverse` files
+  contents <- traverse TIO.readFile files
   gen <- getStdGen
-  let stored = store . seqs3 . parse $ T.concat contents
+  let stored = store . sliding3 . parse . T.concat $ contents
   let sentence = evalState (genSentence stored) gen
   TIO.putStrLn . T.concat . intersperse " " $ sentence
