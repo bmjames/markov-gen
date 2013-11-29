@@ -41,10 +41,10 @@ isSentenceEnd w = case T.last w of
 parse :: Text -> [Word]
 parse = T.words
 
-sliding3 :: [Word] -> [(Word, Word, Word)]
-sliding3 ws = zip3 ws ws1 ws2
-  where ws1 = drop 1 ws
-        ws2 = drop 1 ws1
+sliding3 :: [a] -> [(a, a, a)]
+sliding3 xs = zip3 xs xs1 xs2
+  where xs1 = drop 1 xs
+        xs2 = drop 1 xs1
 
 type Store = SMap (Word, Word) (Set Word)
 
