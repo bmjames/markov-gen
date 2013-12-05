@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, Rank2Types #-}
 
-module Markov where
+module Main where
 
 import Control.Monad.State (State, state, evalState)
 import Data.Char           (isUpper)
