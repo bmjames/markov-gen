@@ -2,6 +2,7 @@
 
 module Main where
 
+import Control.Applicative (liftA2)
 import Control.Monad.State (State, state, evalState)
 import Data.Char           (isUpper)
 import Data.Functor        ((<$>))
@@ -66,7 +67,8 @@ genSentence st = do
 
 firstWords :: Store -> RNG (Word, Word)
 firstWords (SMap st) = randElem candidates
-  where candidates = filter (isSentenceStart . fst) (Map.keys st)
+  where candidates = filter suitable (Map.keys st)
+        suitable   = liftA2 (&&) isSentenceStart (not . isSentenceEnd) . fst
 
 nextWord :: Store -> (Word, Word) -> RNG Word
 nextWord (SMap st) k = randElem $ Set.elems candidates
