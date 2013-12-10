@@ -6,31 +6,19 @@ import Control.Arrow       ((&&&))
 import Control.Monad.State (State, state, evalState)
 import Data.Bitraversable  (bisequence)
 import Data.Char           (isUpper)
-import Data.Monoid         (Monoid(..))
 import Data.Foldable       (foldMap)
 import Data.Traversable    (traverse)
 import Data.List           (intersperse, unfoldr)
-import Data.Set            (Set)
 import Options.Applicative
-import Data.Text           (Text)
 import System.Random
-import qualified Data.Set as Set
+import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
-import qualified Data.Map as Map
+import qualified Data.Map as M
 
--- | Newtype for a Map with a more useful Monoid
-newtype SMap a b = SMap (Map.Map a b) deriving Show
-
--- TODO this should only require Semigroup, not Monoid, for b
-instance (Ord a, Monoid b) => Monoid (SMap a b) where
-  mempty = SMap Map.empty
-  mappend (SMap m1) (SMap m2) = SMap $ Map.unionWith mappend m1 m2
-
-type Word = Text
+type Word = T.Text
 
 isSentenceStart :: Word -> Bool
-
 isSentenceStart = isUpper . T.head
 
 isSentenceEnd :: Word -> Bool
@@ -40,7 +28,7 @@ isSentenceEnd w = case T.last w of
   '?' -> True
   _   -> False
 
-parse :: Text -> [Word]
+parse :: T.Text -> [Word]
 parse = T.words
 
 slidingN :: Int -> [a] -> [[a]]
@@ -52,11 +40,10 @@ take' n [] | n > 0     = Nothing
            | otherwise = Just []
 take' n (x:xs) = (x:) <$> take' (n-1) xs
 
-type Store = SMap [Word] (Set Word)
+type Store = M.Map [Word] (S.Set Word)
 
 store :: [[Word]] -> Store
-store = foldMap $ \ws ->
-  SMap $ Map.singleton (init ws) (Set.singleton $ last ws)
+store = M.fromListWith S.union . map (init &&& S.singleton . last)
 
 type RNG a = (RandomGen g) => State g a
 
@@ -71,13 +58,13 @@ genSentence n st = do
                              genSentence' (w':ws)
 
 firstWords :: Store -> RNG [Word]
-firstWords (SMap st) = randElem candidates
-  where candidates = filter suitable (Map.keys st)
+firstWords st = randElem candidates
+  where candidates = filter suitable (M.keys st)
         suitable   = liftA2 (&&) isSentenceStart (not . isSentenceEnd) . head
 
 nextWord :: Store -> [Word] -> RNG Word
-nextWord (SMap st) k = randElem $ Set.elems candidates
-  where candidates = st Map.! k
+nextWord st k = randElem $ S.elems candidates
+  where candidates = st M.! k
 
 nextInt :: Int -> RNG Int
 nextInt max = (`mod` max) <$> state next
