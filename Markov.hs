@@ -6,7 +6,6 @@ import Control.Arrow       ((&&&))
 import Control.Monad.State (State, state, evalState)
 import Data.Bitraversable  (bisequence)
 import Data.Char           (isUpper)
-import Data.Foldable       (foldMap)
 import Data.Traversable    (traverse)
 import Data.List           (intersperse, unfoldr)
 import Options.Applicative
