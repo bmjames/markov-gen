@@ -2,7 +2,7 @@ A very simple Markov chain text generator.
 
 Usage:
 
-    Markov <input files ...>
+    Markov [-n <chain length>] <input files ...>
 
 For example,
 

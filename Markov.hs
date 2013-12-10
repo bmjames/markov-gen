@@ -2,16 +2,16 @@
 
 module Main where
 
-import Control.Applicative (liftA2)
+import Control.Arrow       ((&&&))
 import Control.Monad.State (State, state, evalState)
+import Data.Bitraversable  (bisequence)
 import Data.Char           (isUpper)
-import Data.Functor        ((<$>))
 import Data.Monoid         (Monoid(..))
 import Data.Foldable       (foldMap)
 import Data.Traversable    (traverse)
-import Data.List           (intersperse)
+import Data.List           (intersperse, unfoldr)
 import Data.Set            (Set)
-import System.Environment  (getArgs)
+import Options.Applicative
 import Data.Text           (Text)
 import System.Random
 import qualified Data.Set as Set
@@ -30,6 +30,7 @@ instance (Ord a, Monoid b) => Monoid (SMap a b) where
 type Word = Text
 
 isSentenceStart :: Word -> Bool
+
 isSentenceStart = isUpper . T.head
 
 isSentenceEnd :: Word -> Bool
@@ -42,35 +43,39 @@ isSentenceEnd w = case T.last w of
 parse :: Text -> [Word]
 parse = T.words
 
-sliding3 :: [a] -> [(a, a, a)]
-sliding3 xs = zip3 xs xs1 xs2
-  where xs1 = drop 1 xs
-        xs2 = drop 1 xs1
+slidingN :: Int -> [a] -> [[a]]
+slidingN n = unfoldr $ bisequence . (take' n &&& Just . drop 1)
 
-type Store = SMap (Word, Word) (Set Word)
+take' :: Int -> [a] -> Maybe [a]
+take' 0 _ = Just []
+take' n [] | n > 0     = Nothing
+           | otherwise = Just []
+take' n (x:xs) = (x:) <$> take' (n-1) xs
 
-store :: [(Word, Word, Word)] -> Store
-store = foldMap $ \(w1, w2, w3) ->
-  SMap $ Map.singleton (w1, w2) (Set.singleton w3)
+type Store = SMap [Word] (Set Word)
+
+store :: [[Word]] -> Store
+store = foldMap $ \ws ->
+  SMap $ Map.singleton (init ws) (Set.singleton $ last ws)
 
 type RNG a = (RandomGen g) => State g a
 
-genSentence :: Store -> RNG [Word]
-genSentence st = do
-  (w1, w2) <- firstWords st
-  ws <- genSentence' [w2, w1]
+genSentence :: Int -> Store -> RNG [Word]
+genSentence n st = do
+  fws <- firstWords st
+  ws  <- genSentence' $ reverse fws
   return $ reverse ws  
-    where genSentence' ws @ (w2:w1:_)
-            | isSentenceEnd w2 = return ws
-            | otherwise = do w3 <- nextWord st (w1, w2)
-                             genSentence' (w3:ws)
+    where genSentence' ws @ (w:ws')
+            | isSentenceEnd w = return ws
+            | otherwise = do w' <- nextWord st $ reverse $ take (n-1) ws
+                             genSentence' (w':ws)
 
-firstWords :: Store -> RNG (Word, Word)
+firstWords :: Store -> RNG [Word]
 firstWords (SMap st) = randElem candidates
   where candidates = filter suitable (Map.keys st)
-        suitable   = liftA2 (&&) isSentenceStart (not . isSentenceEnd) . fst
+        suitable   = liftA2 (&&) isSentenceStart (not . isSentenceEnd) . head
 
-nextWord :: Store -> (Word, Word) -> RNG Word
+nextWord :: Store -> [Word] -> RNG Word
 nextWord (SMap st) k = randElem $ Set.elems candidates
   where candidates = st Map.! k
 
@@ -80,11 +85,25 @@ nextInt max = (`mod` max) <$> state next
 randElem :: [a] -> RNG a
 randElem xs = (xs !!) <$> nextInt (length xs)
 
-main :: IO ()
-main = do
-  files <- getArgs
+data Options = Opts { chainLength :: Int, inputFiles :: [FilePath] }
+
+opts :: Parser Options
+opts = Opts
+  <$> option (long "chain-length"
+           <> short 'n'
+           <> value 3
+           <> metavar "NUMBER")
+  <*> some (argument str $ metavar "FILES...")
+
+run :: Options -> IO ()
+run (Opts n files) = do
   contents <- traverse TIO.readFile files
-  gen <- getStdGen
-  let stored = store . sliding3 . parse . T.concat $ contents
-  let sentence = evalState (genSentence stored) gen
+  gen      <- getStdGen
+  let stored = store . slidingN n . parse . T.concat $ contents  
+  let sentence = evalState (genSentence n stored) gen
   TIO.putStrLn . T.concat . intersperse " " $ sentence
+
+main :: IO ()
+main = execParser optsInfo >>= run
+  where optsInfo = info (helper <*> opts)
+          (fullDesc <> progDesc "Generate a sentence based on input text")
