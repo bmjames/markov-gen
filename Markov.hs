@@ -46,20 +46,25 @@ store = M.fromListWith S.union . map (init &&& S.singleton . last)
 
 type RNG a = (RandomGen g) => State g a
 
-genSentence :: Int -> Store -> RNG [Word]
-genSentence n st = do
+genSentence :: Int -> Int -> Store -> RNG [Word]
+genSentence len minWs st = do
+  s <- genSentence' len st 
+  if length s < minWs
+    then genSentence len minWs st
+    else return s
+
+genSentence' :: Int -> Store -> RNG [Word]
+genSentence' n st = do
   fws <- firstWords st
-  ws  <- genSentence' $ reverse fws
+  ws  <- rest $ reverse fws
   return $ reverse ws  
-    where genSentence' ws @ (w:_)
+    where rest ws @ (w:_)
             | isSentenceEnd w = return ws
             | otherwise = do w' <- nextWord st $ reverse $ take (n-1) ws
-                             genSentence' (w':ws)
+                             rest (w':ws)
 
 firstWords :: Store -> RNG [Word]
-firstWords st = randElem candidates
-  where candidates = filter suitable (M.keys st)
-        suitable   = liftA2 (&&) isSentenceStart (not . isSentenceEnd) . head
+firstWords = randElem . filter (isSentenceStart . head) . M.keys
 
 nextWord :: Store -> [Word] -> RNG Word
 nextWord st k = randElem $ S.elems candidates
@@ -69,7 +74,9 @@ randElem :: [a] -> RNG a
 randElem xs = (xs !!) <$> nextInt (length xs)
   where nextInt ceil = flip mod ceil <$> state next
 
-data Options = Opts { chainLength :: Int, inputFiles :: [FilePath] }
+data Options = Opts { chainLength :: Int
+                    , minWords :: Int
+                    , inputFiles :: [FilePath] }
 
 opts :: Parser Options
 opts = Opts
@@ -77,14 +84,18 @@ opts = Opts
            <> short 'n'
            <> value 3
            <> metavar "NUMBER")
+  <*> option (long "min-words"
+           <> short 'm'
+           <> value 1
+           <> metavar "NUMBER")
   <*> some (argument str $ metavar "FILES...")
 
 run :: Options -> IO ()
-run (Opts n files) = do
+run (Opts n m files) = do
   contents <- traverse TIO.readFile files
   gen      <- getStdGen
   let stored = store . slidingN n . parse . T.concat $ contents  
-  let sentence = evalState (genSentence n stored) gen
+  let sentence = evalState (genSentence n m stored) gen
   TIO.putStrLn . T.concat . intersperse " " $ sentence
 
 main :: IO ()
