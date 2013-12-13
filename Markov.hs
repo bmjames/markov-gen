@@ -51,7 +51,7 @@ genSentence n st = do
   fws <- firstWords st
   ws  <- genSentence' $ reverse fws
   return $ reverse ws  
-    where genSentence' ws @ (w:ws')
+    where genSentence' ws @ (w:_)
             | isSentenceEnd w = return ws
             | otherwise = do w' <- nextWord st $ reverse $ take (n-1) ws
                              genSentence' (w':ws)
