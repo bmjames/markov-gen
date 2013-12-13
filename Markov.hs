@@ -65,11 +65,9 @@ nextWord :: Store -> [Word] -> RNG Word
 nextWord st k = randElem $ S.elems candidates
   where candidates = st M.! k
 
-nextInt :: Int -> RNG Int
-nextInt max = (`mod` max) <$> state next
-
 randElem :: [a] -> RNG a
 randElem xs = (xs !!) <$> nextInt (length xs)
+  where nextInt ceil = flip mod ceil <$> state next
 
 data Options = Opts { chainLength :: Int, inputFiles :: [FilePath] }
 
