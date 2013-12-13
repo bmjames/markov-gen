@@ -54,10 +54,7 @@ genSentence len minWs st = do
     else return s
 
 genSentence' :: Int -> Store -> RNG [Word]
-genSentence' n st = do
-  fws <- firstWords st
-  ws  <- rest $ reverse fws
-  return $ reverse ws  
+genSentence' n st = fmap reverse $ rest . reverse =<< firstWords st
     where rest ws @ (w:_)
             | isSentenceEnd w = return ws
             | otherwise = do w' <- nextWord st $ reverse $ take (n-1) ws
