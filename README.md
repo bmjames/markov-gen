@@ -1,6 +1,6 @@
 A very simple Markov chain text generator.
 
-Given one or more input files to analyse, and an optional minimum word count, the program uses a Markov chain algorithm to produce a sentence of nonsense in theliterary style of the input.
+Given one or more input files to analyse, and an optional minimum word count, the program uses a Markov chain algorithm to produce a sentence of nonsense in the literary style of the input.
 
 Usage:
 
