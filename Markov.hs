@@ -46,19 +46,23 @@ store = M.fromListWith S.union . map (init &&& S.singleton . last)
 
 type RNG a = (RandomGen g) => State g a
 
-genSentence :: Int -> Int -> Store -> RNG [Word]
-genSentence len minWs st = do
-  s <- genSentence' len st 
-  if length s < minWs
-    then genSentence len minWs st
-    else return s
+genSentences :: Int -> Int -> Store -> RNG [Word]
+genSentences n minWs st =
+  fmap (takeSentences . concat) $ sequence . repeat $ genSentence n st
+    where takeSentences ws = let (ws', ws'') = splitAt (minWs - 1) ws
+                             in ws' ++ takeUntil isSentenceEnd ws''
 
-genSentence' :: Int -> Store -> RNG [Word]
-genSentence' n st = fmap reverse $ rest . reverse =<< firstWords st
-    where rest ws @ (w:_)
-            | isSentenceEnd w = return ws
-            | otherwise = do w' <- nextWord st $ reverse $ take (n-1) ws
-                             rest (w':ws)
+takeUntil :: (a -> Bool) -> [a] -> [a]
+takeUntil _ [] = []
+takeUntil p (x:xs) | p x = [x]
+                   | otherwise = x : takeUntil p xs
+
+genSentence :: Int -> Store -> RNG [Word]
+genSentence n st = fmap reverse $ rest . reverse =<< firstWords st
+  where rest ws @ (w:_)
+          | isSentenceEnd w = return ws
+          | otherwise = do w' <- nextWord st $ reverse $ take (n-1) ws
+                           rest (w':ws)
 
 firstWords :: Store -> RNG [Word]
 firstWords = randElem . filter (isSentenceStart . head) . M.keys
@@ -92,10 +96,10 @@ run (Opts n m files) = do
   contents <- traverse TIO.readFile files
   gen      <- getStdGen
   let stored = store . slidingN n . parse . T.concat $ contents  
-  let sentence = evalState (genSentence n m stored) gen
+  let sentence = evalState (genSentences n m stored) gen
   TIO.putStrLn . T.concat . intersperse " " $ sentence
 
 main :: IO ()
 main = execParser optsInfo >>= run
   where optsInfo = info (helper <*> opts)
-          (fullDesc <> progDesc "Generate a sentence based on input text")
+          (fullDesc <> progDesc "Generate nonsense sentences based on input text")
