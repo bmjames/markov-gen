@@ -1,19 +1,29 @@
 {-# LANGUAGE OverloadedStrings, Rank2Types #-}
 
-module Main where
+module Markov
+  (
+    Store
+  , RNG
+  , analyse
+  , genSentence
+  , genSentences
+  ) where
 
 import Control.Arrow       ((&&&))
-import Control.Monad.State (State, state, evalState)
+import Control.Monad.State (State, state)
 import Data.Bitraversable  (bisequence)
 import Data.Char           (isUpper)
-import Data.Traversable    (traverse)
-import Data.List           (intersperse, unfoldr)
+import Data.List           (unfoldr)
+import Data.Text           (Text)
 import Options.Applicative
 import System.Random
+
 import qualified Data.Set as S
 import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
 import qualified Data.Map as M
+
+analyse :: Int -> Text -> Store
+analyse n = store . slidingN n . parse
 
 type Word = T.Text
 
@@ -74,32 +84,3 @@ nextWord st k = randElem $ S.elems candidates
 randElem :: [a] -> RNG a
 randElem xs = (xs !!) <$> nextInt (length xs)
   where nextInt ceil = flip mod ceil <$> state next
-
-data Options = Opts { chainLength :: Int
-                    , minWords :: Int
-                    , inputFiles :: [FilePath] }
-
-opts :: Parser Options
-opts = Opts
-  <$> option (long "chain-length"
-           <> short 'n'
-           <> value 3
-           <> metavar "NUMBER")
-  <*> option (long "min-words"
-           <> short 'm'
-           <> value 1
-           <> metavar "NUMBER")
-  <*> some (argument str $ metavar "FILES...")
-
-run :: Options -> IO ()
-run (Opts n m files) = do
-  contents <- traverse TIO.readFile files
-  gen      <- getStdGen
-  let stored = store . slidingN n . parse . T.concat $ contents  
-  let sentence = evalState (genSentences n m stored) gen
-  TIO.putStrLn . T.concat . intersperse " " $ sentence
-
-main :: IO ()
-main = execParser optsInfo >>= run
-  where optsInfo = info (helper <*> opts)
-          (fullDesc <> progDesc "Generate nonsense sentences based on input text")
