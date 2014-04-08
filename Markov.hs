@@ -1,3 +1,4 @@
+
 {-# LANGUAGE OverloadedStrings, Rank2Types #-}
 
 module Markov
@@ -15,17 +16,18 @@ import Data.Bitraversable  (bisequence)
 import Data.Char           (isUpper)
 import Data.List           (unfoldr)
 import Data.Text           (Text)
-import Options.Applicative
 import System.Random
 
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Map as M
 
+type Word = T.Text
+
+type Store = M.Map [Word] (S.Set Word)
+
 analyse :: Int -> Text -> Store
 analyse n = store . slidingN n . parse
-
-type Word = T.Text
 
 isSentenceStart :: Word -> Bool
 isSentenceStart = isUpper . T.head
@@ -47,14 +49,11 @@ take' :: Int -> [a] -> Maybe [a]
 take' 0 _ = Just []
 take' n [] | n > 0     = Nothing
            | otherwise = Just []
-take' n (x:xs) = (x:) <$> take' (n-1) xs
+take' n (x:xs) = fmap (x:) $ take' (n-1) xs
 
-type Store = M.Map [Word] (S.Set Word)
 
 store :: [[Word]] -> Store
 store = M.fromListWith S.union . map (init &&& S.singleton . last)
-
-type RNG a = (RandomGen g) => State g a
 
 genSentences :: Int -> Int -> Store -> RNG [Word]
 genSentences n minWs st =
@@ -81,6 +80,13 @@ nextWord :: Store -> [Word] -> RNG Word
 nextWord st k = randElem $ S.elems candidates
   where candidates = st M.! k
 
+
+-- Random number generation
+
+type RNG a = (RandomGen g) => State g a
+
 randElem :: [a] -> RNG a
-randElem xs = (xs !!) <$> nextInt (length xs)
-  where nextInt ceil = flip mod ceil <$> state next
+randElem xs = fmap (xs !!) $ nextInt (length xs)
+
+nextInt :: Int -> RNG Int
+nextInt ceil = fmap (`mod` ceil) $ state next
