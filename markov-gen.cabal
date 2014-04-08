@@ -26,5 +26,6 @@ executable markov-gen
                      , random >=1.0 && <1.1
                      , containers >=0.5 && <0.6
                      , text >=0.11 && <0.12
+  ghc-options:         -O2 -Wall
   -- hs-source-dirs:      
   default-language:    Haskell2010
