@@ -18,7 +18,7 @@ cabal-version:       >=1.10
 executable markov-gen
   main-is:             Main.hs
   other-modules:       Markov
-  other-extensions:    OverloadedStrings, Rank2Types
+  other-extensions:    BangPatterns, OverloadedStrings, Rank2Types
   build-depends:       base >=4.6 && <4.8
                      , mtl >=2.1 && <2.2
                      , bifunctors >=4.1 && <4.2
