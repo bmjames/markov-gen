@@ -19,7 +19,7 @@ executable markov-gen
   main-is:             Main.hs
   other-modules:       Markov
   other-extensions:    OverloadedStrings, Rank2Types
-  build-depends:       base >=4.6 && <4.7
+  build-depends:       base >=4.6 && <4.8
                      , mtl >=2.1 && <2.2
                      , bifunctors >=4.1 && <4.2
                      , optparse-applicative >=0.7 && <0.8
